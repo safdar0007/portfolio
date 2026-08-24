@@ -26,18 +26,22 @@
   <!-- Navigation Bar -->
   <nav class="u-nav" id="nav">
     <a href="#home" class="logo">Safdar Ali<span>.</span></a>
-    <button class="nav-toggle" id="navToggle" aria-label="Toggle menu" aria-expanded="false">
+    <button class="nav-toggle" id="navToggle" type="button" aria-label="Open navigation menu" aria-controls="navLinks" aria-expanded="false">
       <span></span>
       <span></span>
       <span></span>
     </button>
-    <div class="links" id="navLinks">
-      <a href="#home">HOME</a>
-      <a href="#about">ABOUT</a>
-      <a href="#projects">WORK</a>
-      <a href="#skills">SKILLS</a>
-      <a href="#education">EDUCATION</a>
-      <a href="#contact" class="cta">CONTACT</a>
+    <div class="nav-backdrop" id="navBackdrop"></div>
+    <div class="links" id="navLinks" aria-label="Primary navigation">
+      <button class="nav-close" id="navClose" type="button" aria-label="Close navigation menu">&times;</button>
+      <ul>
+        <li><a href="#home" class="active" aria-current="page">HOME</a></li>
+        <li><a href="#about">ABOUT</a></li>
+        <li><a href="#projects">WORK</a></li>
+        <li><a href="#skills">SKILLS</a></li>
+        <li><a href="#education">EDUCATION</a></li>
+        <li><a href="#contact" class="cta">CONTACT</a></li>
+      </ul>
     </div>
   </nav>
 

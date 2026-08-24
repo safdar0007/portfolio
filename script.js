@@ -10,28 +10,70 @@
   const nav = document.getElementById("nav");
   const navToggle = document.getElementById("navToggle");
   const navLinks = document.getElementById("navLinks");
+  const navClose = document.getElementById("navClose");
+  const navBackdrop = document.getElementById("navBackdrop");
+  const navItems = navLinks ? [...navLinks.querySelectorAll("a")] : [];
+  const sections = navItems
+    .map((link) => document.querySelector(link.getAttribute("href")))
+    .filter(Boolean);
 
   // Add scroll class to navbar
   window.addEventListener("scroll", () => {
     nav.classList.toggle("scrolled", window.scrollY > 40);
   });
 
-  // Mobile menu toggle
+  // Mobile menu controls
   if (navToggle && navLinks) {
-    navToggle.addEventListener("click", () => {
-      const isOpen = navLinks.classList.toggle("open");
-      navToggle.setAttribute("aria-expanded", isOpen);
+    const setMenuState = (isOpen) => {
+      navLinks.classList.toggle("open", isOpen);
+      navBackdrop?.classList.toggle("open", isOpen);
       navToggle.classList.toggle("active", isOpen);
+      navToggle.setAttribute("aria-expanded", isOpen);
+      navToggle.setAttribute("aria-label", isOpen ? "Close navigation menu" : "Open navigation menu");
+      document.body.classList.toggle("menu-open", isOpen);
+    };
+
+    navToggle.addEventListener("click", () => {
+      const isOpen = !navLinks.classList.contains("open");
+      setMenuState(isOpen);
+      if (isOpen) navClose?.focus();
     });
 
-    // Close menu when links are clicked
-    navLinks.querySelectorAll("a").forEach((link) => {
-      link.addEventListener("click", () => {
-        navLinks.classList.remove("open");
-        navToggle.classList.remove("active");
-        navToggle.setAttribute("aria-expanded", "false");
-      });
+    navClose?.addEventListener("click", () => setMenuState(false));
+    navBackdrop?.addEventListener("click", () => setMenuState(false));
+
+    navItems.forEach((link) => {
+      link.addEventListener("click", () => setMenuState(false));
     });
+
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && navLinks.classList.contains("open")) {
+        setMenuState(false);
+        navToggle.focus();
+      }
+    });
+  }
+
+  /* ---------------- Navigation Scroll Spy ---------------- */
+  if (navItems.length && sections.length) {
+    const sectionObserver = new IntersectionObserver(
+      (entries) => {
+        const visibleSection = entries
+          .filter((entry) => entry.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!visibleSection) return;
+
+        navItems.forEach((link) => {
+          const isActive = link.getAttribute("href") === `#${visibleSection.target.id}`;
+          link.classList.toggle("active", isActive);
+          if (isActive) link.setAttribute("aria-current", "page");
+          else link.removeAttribute("aria-current");
+        });
+      },
+      { rootMargin: "-25% 0px -25%", threshold: [0.1, 0.5, 0.9] }
+    );
+
+    sections.forEach((section) => sectionObserver.observe(section));
   }
 
   /* ---------------- Scroll Progress Tracker ---------------- */
@@ -140,18 +182,48 @@
 
   /* ---------------- 3D Canvas Background (Three.js) ---------------- */
   const canvas = document.getElementById("universe");
-  if (!canvas || typeof THREE === "undefined") return;
+  const enableWebGLFallback = () => {
+    document.body.classList.add("webgl-fallback");
+  };
+
+  if (!canvas || typeof THREE === "undefined") {
+    enableWebGLFallback();
+    return;
+  }
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x02030a);
   scene.fog = new THREE.FogExp2(0x02030a, 0.018);
 
-  const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 300);
+  const isMobile = window.matchMedia("(max-width: 750px)").matches;
+  const viewport = () => ({
+    width: window.innerWidth,
+    height: window.visualViewport ? window.visualViewport.height : window.innerHeight
+  });
+  const initialViewport = viewport();
+  const camera = new THREE.PerspectiveCamera(55, initialViewport.width / initialViewport.height, 0.1, 300);
   camera.position.set(0, 0, 12);
 
-  const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: !isMobile });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
+    renderer.setSize(initialViewport.width, initialViewport.height);
+  } catch (error) {
+    enableWebGLFallback();
+    return;
+  }
+
+  let contextLost = false;
+  canvas.addEventListener("webglcontextlost", (event) => {
+    event.preventDefault();
+    contextLost = true;
+    enableWebGLFallback();
+  });
+  canvas.addEventListener("webglcontextrestored", () => {
+    contextLost = false;
+    document.body.classList.remove("webgl-fallback");
+  });
 
   // Lighting
   scene.add(new THREE.AmbientLight(0xffffff, 0.22));
@@ -160,7 +232,7 @@
   scene.add(mainLight);
 
   /* Planet Core & Wireframe Overlay */
-  const planetGeo = new THREE.SphereGeometry(2.7, 64, 64);
+  const planetGeo = new THREE.SphereGeometry(2.7, isMobile ? 32 : 64, isMobile ? 32 : 64);
   const planetMat = new THREE.MeshStandardMaterial({
     color: 0x151925,
     metalness: 0.85,
@@ -170,7 +242,7 @@
   planet.position.set(3, 0, -3);
   scene.add(planet);
 
-  const wireGeo = new THREE.SphereGeometry(2.82, 32, 32);
+  const wireGeo = new THREE.SphereGeometry(2.82, isMobile ? 16 : 32, isMobile ? 16 : 32);
   const wireMat = new THREE.MeshBasicMaterial({
     color: 0x9ca4c4,
     wireframe: true,
@@ -184,7 +256,7 @@
   /* Orbit Rings */
   const rings = [];
   for (let i = 0; i < 3; i++) {
-    const ringGeo = new THREE.TorusGeometry(3.3 + i * 0.55, 0.012, 8, 180);
+    const ringGeo = new THREE.TorusGeometry(3.3 + i * 0.55, 0.012, 8, isMobile ? 90 : 180);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0xffffff,
       transparent: true,
@@ -199,7 +271,7 @@
   }
 
   /* Distant Starfield (5000 particles) */
-  const STAR_COUNT = 5000;
+  const STAR_COUNT = isMobile ? 1800 : 5000;
   const starPos = new Float32Array(STAR_COUNT * 3);
   for (let i = 0; i < STAR_COUNT; i++) {
     starPos[i * 3]     = (Math.random() - 0.5) * 160;
@@ -218,7 +290,7 @@
   scene.add(stars);
 
   /* Orbital Data Particles */
-  const DATA_COUNT = 350;
+  const DATA_COUNT = isMobile ? 120 : 350;
   const dataPos = new Float32Array(DATA_COUNT * 3);
   for (let i = 0; i < DATA_COUNT; i++) {
     const a = Math.random() * Math.PI * 2;
@@ -257,16 +329,19 @@
   }, { passive: true });
 
   /* Window Resizing */
-  let lastWidth = window.innerWidth;
-  window.addEventListener("resize", () => {
-    // Only resize WebGL canvas if width actually changes, ignoring mobile browser collapsible address bar height events
-    if (window.innerWidth !== lastWidth) {
-      lastWidth = window.innerWidth;
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-  });
+  function resizeRenderer() {
+    const currentViewport = viewport();
+    if (!currentViewport.width || !currentViewport.height) return;
+    camera.aspect = currentViewport.width / currentViewport.height;
+    camera.updateProjectionMatrix();
+    renderer.setSize(currentViewport.width, currentViewport.height);
+  }
+
+  window.addEventListener("resize", resizeRenderer);
+  window.addEventListener("orientationchange", resizeRenderer);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", resizeRenderer);
+  }
 
   /* Animation Render Loop */
   const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -321,7 +396,9 @@
       rings.forEach((ring) => ring.position.copy(planet.position));
     }
 
-    renderer.render(scene, camera);
+    if (!contextLost) {
+      renderer.render(scene, camera);
+    }
   }
   
   animate();
