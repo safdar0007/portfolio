@@ -10,7 +10,6 @@
   const nav = document.getElementById("nav");
   const navToggle = document.getElementById("navToggle");
   const navLinks = document.getElementById("navLinks");
-  const navClose = document.getElementById("navClose");
   const navBackdrop = document.getElementById("navBackdrop");
   const navItems = navLinks ? [...navLinks.querySelectorAll("a")] : [];
   const sections = navItems
@@ -36,10 +35,9 @@
     navToggle.addEventListener("click", () => {
       const isOpen = !navLinks.classList.contains("open");
       setMenuState(isOpen);
-      if (isOpen) navClose?.focus();
+      if (isOpen) navToggle.focus();
     });
 
-    navClose?.addEventListener("click", () => setMenuState(false));
     navBackdrop?.addEventListener("click", () => setMenuState(false));
 
     navItems.forEach((link) => {
