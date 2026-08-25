@@ -194,19 +194,48 @@
   scene.fog = new THREE.FogExp2(0x02030a, 0.018);
 
   const isMobile = window.matchMedia("(max-width: 750px)").matches;
-  const viewport = () => ({
-    width: window.innerWidth,
-    height: window.visualViewport ? window.visualViewport.height : window.innerHeight
+  const getViewport = () => ({
+    width: window.innerWidth || document.documentElement.clientWidth || 375,
+    height: window.innerHeight || document.documentElement.clientHeight || 667
   });
-  const initialViewport = viewport();
+
+  const initialViewport = getViewport();
   const camera = new THREE.PerspectiveCamera(55, initialViewport.width / initialViewport.height, 0.1, 300);
   camera.position.set(0, 0, 12);
 
+  // Helper for resilient WebGL context creation on mobile GPUs
+  function createWebGLContext(canvasEl, isMobileDevice) {
+    const contextAttributes = {
+      alpha: false,
+      depth: true,
+      stencil: false,
+      antialias: !isMobileDevice,
+      powerPreference: "default",
+      failIfMajorPerformanceCaveat: false
+    };
+    try {
+      return canvasEl.getContext("webgl2", contextAttributes) ||
+             canvasEl.getContext("webgl", contextAttributes) ||
+             canvasEl.getContext("experimental-webgl", contextAttributes);
+    } catch (e) {
+      return null;
+    }
+  }
+
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: !isMobile });
+    const glContext = createWebGLContext(canvas, isMobile);
+    const rendererOptions = {
+      canvas: canvas,
+      antialias: !isMobile,
+      powerPreference: "default"
+    };
+    if (glContext) {
+      rendererOptions.context = glContext;
+    }
+    renderer = new THREE.WebGLRenderer(rendererOptions);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2));
-    renderer.setSize(initialViewport.width, initialViewport.height);
+    renderer.setSize(initialViewport.width, initialViewport.height, false);
   } catch (error) {
     enableWebGLFallback();
     return;
@@ -320,6 +349,12 @@
     handleMove(e.clientX, e.clientY);
   });
 
+  window.addEventListener("touchstart", (e) => {
+    if (e.touches && e.touches.length > 0) {
+      handleMove(e.touches[0].clientX, e.touches[0].clientY);
+    }
+  }, { passive: true });
+
   window.addEventListener("touchmove", (e) => {
     if (e.touches && e.touches.length > 0) {
       handleMove(e.touches[0].clientX, e.touches[0].clientY);
@@ -328,11 +363,11 @@
 
   /* Window Resizing */
   function resizeRenderer() {
-    const currentViewport = viewport();
+    const currentViewport = getViewport();
     if (!currentViewport.width || !currentViewport.height) return;
     camera.aspect = currentViewport.width / currentViewport.height;
     camera.updateProjectionMatrix();
-    renderer.setSize(currentViewport.width, currentViewport.height);
+    renderer.setSize(currentViewport.width, currentViewport.height, false);
   }
 
   window.addEventListener("resize", resizeRenderer);
@@ -374,25 +409,25 @@
       stars.rotation.y = smoothScrollProgress * 0.15;
       stars.rotation.x = smoothScrollProgress * 0.05;
       dataParticles.rotation.y += 0.0004;
-
-      // Scroll linked camera position calculations
-      const targetX = Math.sin(smoothScrollProgress * Math.PI * 2) * 4;
-      const targetY = Math.cos(smoothScrollProgress * Math.PI * 2) * 2;
-      const targetZ = 12 - smoothScrollProgress * 8;
-
-      camera.position.x += (targetX + mouseX * 1.5 - camera.position.x) * 0.025;
-      camera.position.y += (targetY - mouseY * 1.2 - camera.position.y) * 0.025;
-      camera.position.z += (targetZ - camera.position.z) * 0.025;
-      camera.rotation.z = Math.sin(smoothScrollProgress * Math.PI * 2) * 0.05;
-
-      // Move planet core with scrolling progress smoothly
-      planet.position.x = 3 - smoothScrollProgress * 8;
-      planet.position.y = Math.sin(smoothScrollProgress * Math.PI * 2) * 3;
-      planet.position.z = -3 + smoothScrollProgress * 4;
-
-      wire.position.copy(planet.position);
-      rings.forEach((ring) => ring.position.copy(planet.position));
     }
+
+    // Scroll linked camera & object positions always update so rendering responds to user scrolling
+    const targetX = Math.sin(smoothScrollProgress * Math.PI * 2) * 4;
+    const targetY = Math.cos(smoothScrollProgress * Math.PI * 2) * 2;
+    const targetZ = 12 - smoothScrollProgress * 8;
+
+    camera.position.x += (targetX + mouseX * 1.5 - camera.position.x) * 0.025;
+    camera.position.y += (targetY - mouseY * 1.2 - camera.position.y) * 0.025;
+    camera.position.z += (targetZ - camera.position.z) * 0.025;
+    camera.rotation.z = Math.sin(smoothScrollProgress * Math.PI * 2) * 0.05;
+
+    // Move planet core with scrolling progress smoothly
+    planet.position.x = 3 - smoothScrollProgress * 8;
+    planet.position.y = Math.sin(smoothScrollProgress * Math.PI * 2) * 3;
+    planet.position.z = -3 + smoothScrollProgress * 4;
+
+    wire.position.copy(planet.position);
+    rings.forEach((ring) => ring.position.copy(planet.position));
 
     if (!contextLost) {
       renderer.render(scene, camera);
